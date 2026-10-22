@@ -846,8 +846,9 @@ class SimulationRunner:
 class PostProcessor:
     """Handles post-simulation data processing."""
     
-    def __init__(self, config: SimulationConfig):
+    def __init__(self, config: SimulationConfig, fasta_dedup: bool = False):
         self.config = config
+        self.fasta_dedup = fasta_dedup
         self.output_dir = config.working_dir / "output_trajectories"
     
     def process_all_results(self, successful_runs: List[int]):
@@ -902,6 +903,7 @@ class PostProcessor:
             self.config.seed_info.seed_host_matching_path,
             {"vcf": self.config.postprocess_config.vcf, "fasta": self.config.postprocess_config.fasta},
             self.config.postprocess_config.branch_color_trait,
+            fasta_dedup=self.fasta_dedup,
         )
     
     def _generate_run_plots(self, run_dir: Path, run_id: int):
@@ -956,8 +958,9 @@ class PostProcessor:
 class SimulationOrchestrator:
     """Main orchestrator for the simulation pipeline."""
     
-    def __init__(self, config_path: Union[str, Path]):
+    def __init__(self, config_path: Union[str, Path], fasta_dedup: bool = False):
         self.config_path = Path(config_path)
+        self.fasta_dedup = fasta_dedup
         self.parser = ConfigParser()
         self.config = None
         self.script_generator = None
@@ -974,7 +977,7 @@ class SimulationOrchestrator:
         # Initialize components
         self.script_generator = SlimScriptGenerator(self.config)
         self.runner = SimulationRunner(self.config)
-        self.post_processor = PostProcessor(self.config)
+        self.post_processor = PostProcessor(self.config, self.fasta_dedup)
         
         # Generate parameter file
         self._generate_parameter_file()
@@ -1093,9 +1096,9 @@ class SimulationOrchestrator:
         return ",".join(str(x) for x in lst)
 
 # ======================== Config-based Interface ================= 
-def all_slim_simulation_by_config(all_config):
+def all_slim_simulation_by_config(all_config, fasta_dedup=False):
     try:
-        orchestrator = SimulationOrchestrator(all_config)
+        orchestrator = SimulationOrchestrator(all_config, fasta_dedup)
     except CustomizedError as e:
         return e
 
@@ -1118,11 +1121,16 @@ def main():
         required=True,
         help='Path to the configuration file'
     )
+    parser.add_argument(
+        '--fasta-dedup',
+        action='store_true',
+        help='Write at most one FASTA sequence per host, using its earliest sample'
+    )
     
     args = parser.parse_args()
     
     # Run simulation
-    orchestrator = SimulationOrchestrator(args.config)
+    orchestrator = SimulationOrchestrator(args.config, args.fasta_dedup)
     orchestrator.run()
 
 

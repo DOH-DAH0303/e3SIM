@@ -7,9 +7,14 @@ suppressPackageStartupMessages({
 
 args <- commandArgs(trailingOnly = TRUE)
 wk_dir <- args[1]
+fasta_dedup <- length(args) > 1 && identical(tolower(args[2]), "true")
 
 sample_csv = fread(file.path(wk_dir, "sample.csv.gz"), header=FALSE, sep=" ", col.names = c("generation", "host_id", "seed_id"))
 
+if (fasta_dedup) {
+  sample_csv <- sample_csv[order(generation)]
+  sample_csv <- sample_csv[!duplicated(host_id)]
+}
 sample_csv[, name := paste0(sample_csv[,generation], ".", sample_csv[,host_id])]
 namesneeded = sample_csv$name
 
@@ -50,11 +55,10 @@ vcf_info_ = selected_rows[, c("POS", "REF", "ALT")]
 total_cores <- detectCores()
 sampled_genomes <- DNAStringSet(mclapply(vcf_lists, vcf2fasta, vcf_info=vcf_info_, mc.cores = total_cores))
 all_names_current = names(sampled_genomes)
-
+print(sampled_genomes)
 write.csv(data.frame(id = 1:nrow(vcf_info_), position = vcf_info_[,"POS"]),
         file.path(wk_dir, "final_samples_snp_pos.csv"), quote=F, row.names=F)
 
 fas_out_path = file.path(wk_dir, "sample.SNPs_only.fasta")
 
 writeXStringSet(sampled_genomes, filepath=fas_out_path, format="fasta", append=TRUE)
-

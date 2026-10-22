@@ -425,14 +425,17 @@ def get_full_fasta(ref_path, wk_dir_):
 
 
 
-def output_fasta(ref_path, wk_dir_):
+def output_fasta(ref_path, wk_dir_, fasta_dedup=False):
     rscript_path = os.path.join(os.path.dirname(__file__), "generate_fas.r")
-    subprocess.run(["Rscript", "--vanilla", rscript_path, wk_dir_])
+    subprocess.run(
+        ["Rscript", "--vanilla", rscript_path, wk_dir_, str(fasta_dedup)],
+        check=True,
+    )
     get_full_fasta(ref_path, wk_dir_)
 
 
 
-def run_per_data_processing(ref_path, wk_dir_, gen_model, runid, n_trait, seed_host_match_path, seq_out, color_trait=1, sigmoid=False):
+def run_per_data_processing(ref_path, wk_dir_, gen_model, runid, n_trait, seed_host_match_path, seq_out, color_trait=1, sigmoid=False, fasta_dedup=False):
     """
     Performs data processing tasks for a specific run.
 
@@ -513,7 +516,7 @@ def run_per_data_processing(ref_path, wk_dir_, gen_model, runid, n_trait, seed_h
     # OUtput FASTA file
         if seq_out["fasta"]:
             print("Writing FASTA file of sampled pathogens...")
-            output_fasta(ref_path, each_wk_dir)
+            output_fasta(ref_path, each_wk_dir, fasta_dedup)
 
 
 
