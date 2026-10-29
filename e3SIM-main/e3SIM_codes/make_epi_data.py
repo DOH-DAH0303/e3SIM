@@ -30,10 +30,10 @@ def make_genome_metadata(sample_csv: pl.DataFrame, base_date: pl.datetime):
         pl.concat_str(
             [pl.col('tick').cast(pl.String), pl.col('host').cast(pl.String)],
             separator="."
-        ).alias("id")
+        ).alias("sequence_id")
     ).with_columns(
         pl.col("date").dt.to_string(format="%Y-%m-%d")
-    ).drop("tick", "days", "host")
+    ).drop("tick", "days")
 
 def find_recovery_tick(
     infection_tick: int,
@@ -82,7 +82,8 @@ def make_epi_case_data(
         )
     )
     sampled_hosts = genome_metadata.select(
-        pl.col("id")
+        pl.col("sequence_id"),
+        pl.col("sequence_id")
         .str.split(".")
         .list.get(1)
         .cast(pl.Int64)
@@ -95,7 +96,7 @@ def make_epi_case_data(
             sampled_hosts,
             left_on="infectee",
             right_on="sampled_host",
-            how="inner",
+            how="left",
         )
         .filter(
             (pl.col("sample_date") >= pl.col("date").dt.date())
@@ -104,14 +105,17 @@ def make_epi_case_data(
                 | (pl.col("sample_date") <= pl.col("recovery_date").dt.date())
             )
         )
-        .select("_infection_row")
-        .unique()
-        .with_columns(pl.lit(True).alias("sampled"))
+        .sort(["_infection_row", "sample_date", "sequence_id"])
+        .group_by("_infection_row")
+        .agg(
+            pl.col("sequence_id").first(),
+            pl.col("sample_date").first().alias("sampling_date"),
+        )
     )
     return (
         epi_data.with_row_index("_infection_row")
         .join(sampled_infections, on="_infection_row", how="left")
-        .with_columns(pl.col("sampled").fill_null(False))
+        .with_columns(pl.col("sequence_id").is_not_null().alias("sampled"))
         .drop("_infection_row", "days", "recovery_days")
     )
 
@@ -165,11 +169,15 @@ if __name__ == "__main__":
         )
 
     metadata=make_genome_metadata(sample_csv=samples, base_date=base_date)
+    print("metadata")
+    print(metadata)
     epi=make_epi_case_data(
         infections=infections,
         genome_metadata=metadata,
         recoveries=recoveries,
         )
+    print("epi_data")
+    print(epi)
     epi.write_csv("epi.csv")
 
     plot_epi_curve(epi_data=epi)
